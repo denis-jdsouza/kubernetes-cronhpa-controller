@@ -34,10 +34,11 @@ type CronHorizontalPodAutoscalerSpec struct {
 
 type Job struct {
 	Name     string `json:"name"`
+	Discription string `json:"discription"`
 	Schedule string `json:"schedule"`
 	// job will only run once if enabled.
 	RunOnce    bool  `json:"runOnce,omitempty"`
-	TargetSize int32 `json:"targetSize"`
+	TargetPercentage int32 `json:"targetPercentage"`
 }
 
 type ScaleTargetRef struct {
@@ -58,11 +59,13 @@ type Condition struct {
 	// Type of job condition, Complete or Failed.
 	Name string `json:"name"`
 
+	Discription string `json:"discription"`
+
 	JobId string `json:"jobId"`
 
 	Schedule string `json:"schedule"`
 
-	TargetSize int32 `json:"targetSize"`
+	TargetPercentage int32 `json:"targetPercentage"`
 
 	RunOnce bool `json:"runOnce"`
 

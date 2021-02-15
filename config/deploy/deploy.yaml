@@ -36,7 +36,7 @@ spec:
         controller-tools.k8s.io: "2.0"
     spec:
       containers:
-      - image: registry.aliyuncs.com/acs/kubernetes-cronhpa-controller:v1.4.0-fc4f6060-aliyun
+      - image: denisjd/kubernetes-cronhpa-controller:v2.0.0
         imagePullPolicy: Always
         name: kubernetes-cronhpa-controller
         env:

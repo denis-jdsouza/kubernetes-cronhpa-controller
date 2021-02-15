@@ -108,7 +108,7 @@ func (r *ReconcileCronHorizontalPodAutoscaler) Reconcile(request reconcile.Reque
 			for _, job := range instance.Spec.Jobs {
 				if cJob.Name == job.Name {
 					// schedule has changed or RunOnce changed
-					if cJob.Schedule != job.Schedule || cJob.RunOnce != job.RunOnce || cJob.TargetSize != job.TargetSize {
+					if cJob.Schedule != job.Schedule || cJob.RunOnce != job.RunOnce || cJob.TargetPercentage != job.TargetPercentage {
 						// jobId exists and remove the job from cronManager
 						if cJob.JobId != "" {
 							err := r.CronManager.delete(cJob.JobId)
@@ -149,7 +149,8 @@ func (r *ReconcileCronHorizontalPodAutoscaler) Reconcile(request reconcile.Reque
 			Name:          job.Name,
 			Schedule:      job.Schedule,
 			RunOnce:       job.RunOnce,
-			TargetSize:    job.TargetSize,
+			Discription:       job.Discription,
+			TargetPercentage:    job.TargetPercentage,
 			LastProbeTime: metav1.Time{Time: time.Now()},
 		}
 		j, err := CronHPAJobFactory(instance, job, r.CronManager.scaler, r.CronManager.mapper, r.Client)

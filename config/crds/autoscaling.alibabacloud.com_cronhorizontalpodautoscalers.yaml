@@ -41,13 +41,15 @@ spec:
                     type: boolean
                   schedule:
                     type: string
-                  targetSize:
+                  targetPercentage:
                     format: int32
                     type: integer
+                  discription:
+                    type: string
                 required:
                 - name
                 - schedule
-                - targetSize
+                - targetPercentage
                 type: object
               type: array
             scaleTargetRef:
@@ -87,7 +89,7 @@ spec:
                     type: string
                   state:
                     type: string
-                  targetSize:
+                  targetPercentage:
                     format: int32
                     type: integer
                 required:
@@ -97,7 +99,7 @@ spec:
                 - runOnce
                 - schedule
                 - state
-                - targetSize
+                - targetPercentage
                 type: object
               type: array
             excludeDates:

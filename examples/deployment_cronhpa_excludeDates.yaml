@@ -38,9 +38,11 @@ spec:
    # exclude every Friday 
    - "* * * * * 5"
    jobs:
-   - name: "scale-down"
+   - name: "scale-up-1"
+     discription: "for scale-up purpose" # optional
      schedule: "30 */1 * * * *"
-     targetSize: 1
-   - name: "scale-up"
+     targetPercentage: 50  # will add 50% more replicas
+   - name: "scale-up-2"
+     discription: "for scale-up purpose" # optional
      schedule: "0 */1 * * * *"
-     targetSize: 3
+     targetPercentage: 30  # will add 30% more replicas
