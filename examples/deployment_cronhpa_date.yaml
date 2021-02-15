@@ -33,9 +33,11 @@ spec:
     kind: Deployment
     name: nginx-deployment-basic
   jobs:
-    - name: "scale-down"
+    - name: "scale-up-1"
+      discription: "for scale-up purpose" # optional
       schedule: "@date 2020-11-16 23:59:00"
-      targetSize: 1
-    - name: "scale-up"
+      targetPercentage: 50  # will add 50% more replicas
+    - name: "scale-up-2"
+      discription: "for scale-up purpose" # optional
       schedule: "@date 2020-11-15 00:00:00"
-      targetSize: 3
+      targetPercentage: 30  # will add 30% more replicas

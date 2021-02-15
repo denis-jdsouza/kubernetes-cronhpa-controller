@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"time"
+	"github.com/dariubs/percent"
 )
 
 const (
@@ -55,7 +56,8 @@ type CronJobHPA struct {
 	HPARef       *v1beta1.CronHorizontalPodAutoscaler
 	id           string
 	name         string
-	DesiredSize  int32
+	Discription  string
+	DesiredPercentage  int32
 	Plan         string
 	RunOnce      bool
 	scaler       scaleclient.ScalesGetter
@@ -109,10 +111,10 @@ func (ch *CronJobHPA) Run() (msg string, err error) {
 
 		// timeout and exit
 		if startTime.Add(maxRetryTimeout).Before(now) {
-			return "", fmt.Errorf("failed to scale %s %s in %s namespace to %d after retrying %d times and exit,because of %v", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.DesiredSize, times, err)
+			return "", fmt.Errorf("failed to scale %s %s in %s namespace to %d after retrying %d times and exit,because of %v", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.DesiredPercentage, times, err)
 		}
 
-		// hpa compatible
+		/* Removing hpa compatibility (to reduce complexity)
 		if ch.TargetRef.RefKind == "HorizontalPodAutoscaler" {
 			msg, err = ch.ScaleHPA()
 			if err == nil {
@@ -124,6 +126,13 @@ func (ch *CronJobHPA) Run() (msg string, err error) {
 				break
 			}
 		}
+		*/
+
+		msg, err = ch.ScalePlainRef()
+		if err == nil {
+			break
+		}
+
 		time.Sleep(updateRetryInterval)
 		times = times + 1
 	}
@@ -171,30 +180,30 @@ func (ch *CronJobHPA) ScaleHPA() (msg string, err error) {
 	}
 
 	if found == false {
-		log.Errorf("failed to found source target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
-		return "", fmt.Errorf("failed to found source target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
+		log.Errorf("failed to find target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
+		return "", fmt.Errorf("failed to find target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
 	}
 
 	updateHPA := false
 
-	if ch.DesiredSize > hpa.Spec.MaxReplicas {
-		hpa.Spec.MaxReplicas = ch.DesiredSize
+	if ch.DesiredPercentage > hpa.Spec.MaxReplicas {
+		hpa.Spec.MaxReplicas = ch.DesiredPercentage
 		updateHPA = true
 	}
 
-	if ch.DesiredSize < *hpa.Spec.MinReplicas {
-		*hpa.Spec.MinReplicas = ch.DesiredSize
+	if ch.DesiredPercentage < *hpa.Spec.MinReplicas {
+		*hpa.Spec.MinReplicas = ch.DesiredPercentage
 		updateHPA = true
 	}
 
 	//
-	if hpa.Status.CurrentReplicas == *hpa.Spec.MinReplicas && ch.DesiredSize < hpa.Status.CurrentReplicas {
-		*hpa.Spec.MinReplicas = ch.DesiredSize
+	if hpa.Status.CurrentReplicas == *hpa.Spec.MinReplicas && ch.DesiredPercentage < hpa.Status.CurrentReplicas {
+		*hpa.Spec.MinReplicas = ch.DesiredPercentage
 		updateHPA = true
 	}
 
-	if hpa.Status.CurrentReplicas < ch.DesiredSize {
-		*hpa.Spec.MinReplicas = ch.DesiredSize
+	if hpa.Status.CurrentReplicas < ch.DesiredPercentage {
+		*hpa.Spec.MinReplicas = ch.DesiredPercentage
 		updateHPA = true
 	}
 
@@ -205,17 +214,17 @@ func (ch *CronJobHPA) ScaleHPA() (msg string, err error) {
 		}
 	}
 
-	if hpa.Status.CurrentReplicas >= ch.DesiredSize {
+	if hpa.Status.CurrentReplicas >= ch.DesiredPercentage {
 		// skip change replicas and exit
-		return fmt.Sprintf("Skip scale replicas because HPA %s current replicas:%d >= desired replicas:%d.", hpa.Name, scale.Spec.Replicas, ch.DesiredSize), nil
+		return fmt.Sprintf("Skip scale replicas because HPA %s current replicas:%d >= desired replicas:%d.", hpa.Name, scale.Spec.Replicas, ch.DesiredPercentage), nil
 	}
 
-	msg = fmt.Sprintf("current replicas:%d, desired replicas:%d.", scale.Spec.Replicas, ch.DesiredSize)
+	msg = fmt.Sprintf("current replicas:%d, desired replicas:%d.", scale.Spec.Replicas, ch.DesiredPercentage)
 
-	scale.Spec.Replicas = int32(ch.DesiredSize)
+	scale.Spec.Replicas = int32(ch.DesiredPercentage)
 	_, err = ch.scaler.Scales(ch.TargetRef.RefNamespace).Update(context.Background(), targetGR, scale, metav1.UpdateOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to scale %s %s in %s namespace to %d, because of %v", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.DesiredSize, err)
+		return "", fmt.Errorf("failed to scale %s %s in %s namespace to %d, because of %v", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.DesiredPercentage, err)
 	}
 	return msg, nil
 }
@@ -230,7 +239,7 @@ func (ch *CronJobHPA) ScalePlainRef() (msg string, err error) {
 	}
 	mappings, err := ch.mapper.RESTMappings(targetGK)
 	if err != nil {
-		return "", fmt.Errorf("Failed to create create mapping,because of %v", err)
+		return "", fmt.Errorf("Failed to create mapping,because of %v", err)
 	}
 
 	found := false
@@ -239,29 +248,35 @@ func (ch *CronJobHPA) ScalePlainRef() (msg string, err error) {
 		scale, err = ch.scaler.Scales(ch.TargetRef.RefNamespace).Get(context.Background(), targetGR, ch.TargetRef.RefName, v1.GetOptions{})
 		if err == nil {
 			found = true
-			log.Infof("%s %s in namespace %s has been scaled successfully. job: %s replicas: %d", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.Name(), ch.DesiredSize)
+			log.Infof("%s %s in namespace %s has been scaled successfully. job: %s targetPercentage: %d", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.Name(), ch.DesiredPercentage)
 			break
 		}
 	}
 
 	if found == false {
-		log.Errorf("failed to find source target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
-		return "", fmt.Errorf("failed to find source target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
+		log.Errorf("failed to find target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
+		return "", fmt.Errorf("failed to find target %s %s in %s namespace", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace)
 	}
 
-	msg = fmt.Sprintf("current replicas:%d, desired replicas:%d.", scale.Spec.Replicas, ch.DesiredSize)
+	// Calculating % of current replicas to increase
+	var increment int32 = int32(percent.Percent(int(ch.DesiredPercentage), int(scale.Spec.Replicas)))
 
-	scale.Spec.Replicas = int32(ch.DesiredSize)
+	msg = fmt.Sprintf("current replicas:%d, desired replicas:%d, increment-by:%d.", scale.Spec.Replicas, scale.Spec.Replicas + increment, increment)
+
+	// Incrementing Replicas with the desired % increase
+	scale.Spec.Replicas += increment
+	// scale.Spec.Replicas = int32(ch.DesiredSize)
+
 	_, err = ch.scaler.Scales(ch.TargetRef.RefNamespace).Update(context.Background(), targetGR, scale, metav1.UpdateOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to scale %s %s in %s namespace to %d, because of %v", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.DesiredSize, err)
+		return "", fmt.Errorf("failed to scale %s %s in %s namespace to %d, because of %v", ch.TargetRef.RefKind, ch.TargetRef.RefName, ch.TargetRef.RefNamespace, ch.DesiredPercentage, err)
 	}
 	return msg, nil
 }
 
 func checkRefValid(ref *TargetRef) error {
 	if ref.RefVersion == "" || ref.RefGroup == "" || ref.RefName == "" || ref.RefNamespace == "" || ref.RefKind == "" {
-		return errors.New("any properties in ref could not be empty")
+		return errors.New("any properties in ref should not be empty")
 	}
 	return nil
 }
@@ -293,8 +308,9 @@ func CronHPAJobFactory(instance *v1beta1.CronHorizontalPodAutoscaler, job v1beta
 		TargetRef:    ref,
 		HPARef:       instance,
 		name:         job.Name,
+		Discription:  job.Discription,
 		Plan:         job.Schedule,
-		DesiredSize:  job.TargetSize,
+		DesiredPercentage:  job.TargetPercentage,
 		RunOnce:      job.RunOnce,
 		scaler:       scaler,
 		mapper:       mapper,
@@ -313,11 +329,11 @@ func IsTodayOff(excludeDates []string) (bool, string) {
 	for _, date := range excludeDates {
 		schedule, err := cron.Parse(date)
 		if err != nil {
-			log.Warningf("Failed to parse schedule %s,and skip this date,because of %v", date, err)
+			log.Warningf("Failed to parse schedule %s, hence skip this date,because of %v", date, err)
 			continue
 		}
 		if nextTime := schedule.Next(now); nextTime.Format(dateFormat) == now.Format(dateFormat) {
-			return true, fmt.Sprintf("skip scaling activity,because of excludeDate (%s).", date)
+			return true, fmt.Sprintf("skip scaling activity because of excludeDate (%s).", date)
 		}
 	}
 	return false, ""
